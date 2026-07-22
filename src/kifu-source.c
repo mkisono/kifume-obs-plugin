@@ -215,6 +215,9 @@ struct kifu_source *kifu_source_create(obs_data_t *settings, obs_source_t *sourc
 	context->logo_image_loaded = false;
 	context->logo_load_attempted = false;
 	context->logo_load_warning_logged = false;
+	context->logo_fade_effect = NULL;
+	context->logo_fade_effect_load_attempted = false;
+	context->logo_fade_effect_warning_logged = false;
 	context->logo_has_seen_detection = false;
 	context->logo_last_detection_ns = 0U;
 	context->logo_boot_grace_until_ns = 0U;
@@ -335,6 +338,7 @@ void kifu_source_render(void *data, gs_effect_t *effect)
 	struct kifu_snapshot snapshot;
 	enum kifu_capture_failure_reason capture_failure_reason = KIFU_CAPTURE_FAILURE_NONE;
 	bool should_render_logo = false;
+	float logo_opacity = 1.0F;
 	memset(&snapshot, 0, sizeof(snapshot));
 
 	const uint64_t now_ns = os_gettime_ns();
@@ -348,6 +352,9 @@ void kifu_source_render(void *data, gs_effect_t *effect)
 	snapshot.backend_address = dup_or_empty(context->snapshot.backend_address);
 	snapshot.capture_source = dup_or_empty(context->snapshot.capture_source);
 	should_render_logo = kifu_render_update_logo_visibility_locked(context, now_ns);
+	if (should_render_logo) {
+		logo_opacity = kifu_render_logo_opacity_locked(context, now_ns);
+	}
 	pthread_mutex_unlock(&context->mutex);
 
 	if (!snapshot.enabled) {
@@ -374,20 +381,14 @@ void kifu_source_render(void *data, gs_effect_t *effect)
 	const bool draw_logo = should_render_logo && logo_texture_ready;
 
 	gs_blend_state_push();
-	gs_blend_function(GS_BLEND_ONE, GS_BLEND_ZERO);
-	if (effect_already_active) {
-		if (draw_logo) {
-			kifu_render_draw_logo(context, &snapshot, draw_effect);
-		} else {
-			kifu_render_draw_dice_crops(context, &snapshot, draw_effect);
-		}
+	gs_blend_function(GS_BLEND_SRCALPHA, GS_BLEND_INVSRCALPHA);
+	if (draw_logo) {
+		kifu_render_draw_logo(context, &snapshot, draw_effect, logo_opacity);
+	} else if (effect_already_active) {
+		kifu_render_draw_dice_crops(context, &snapshot, draw_effect);
 	} else {
 		while (gs_effect_loop(draw_effect, "Draw")) {
-			if (draw_logo) {
-				kifu_render_draw_logo(context, &snapshot, draw_effect);
-			} else {
-				kifu_render_draw_dice_crops(context, &snapshot, draw_effect);
-			}
+			kifu_render_draw_dice_crops(context, &snapshot, draw_effect);
 		}
 	}
 	gs_blend_state_pop();

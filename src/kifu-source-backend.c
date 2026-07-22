@@ -219,14 +219,8 @@ static void *kifu_backend_worker(void *data)
 				context->latest_dice[i] = result.dice[i];
 			}
 			if (context->latest_dice_count > 0U) {
-				const bool first_detection = !context->logo_has_seen_detection;
 				context->logo_has_seen_detection = true;
 				context->logo_last_detection_ns = os_gettime_ns();
-				if (first_detection) {
-					context->logo_visible = false;
-					context->logo_visible_since_ns = 0U;
-					context->logo_hidden_since_ns = 0U;
-				}
 			}
 			clear_inference_frame_locked(context);
 			if (frame_bytes != NULL && frame_size > 0U) {

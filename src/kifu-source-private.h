@@ -6,7 +6,11 @@ void kifu_render_destroy_preview_textures(struct kifu_source *context);
 void kifu_render_destroy_logo_image(struct kifu_source *context);
 bool kifu_render_ensure_logo_image_texture(struct kifu_source *context);
 bool kifu_render_update_logo_visibility_locked(struct kifu_source *context, uint64_t now_ns);
-void kifu_render_draw_logo(struct kifu_source *context, const struct kifu_snapshot *snapshot, gs_effect_t *effect);
+float kifu_render_logo_opacity_locked(const struct kifu_source *context, uint64_t now_ns);
+void kifu_render_draw_logo(struct kifu_source *context,
+				   const struct kifu_snapshot *snapshot,
+				   gs_effect_t *effect,
+				   float opacity);
 void kifu_render_draw_dice_crops(struct kifu_source *context, const struct kifu_snapshot *snapshot, gs_effect_t *effect);
 
 void kifu_capture_destroy_resources(struct kifu_source *context);

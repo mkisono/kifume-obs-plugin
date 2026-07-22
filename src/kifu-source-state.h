@@ -59,6 +59,9 @@ struct kifu_source {
 	bool logo_image_loaded;
 	bool logo_load_attempted;
 	bool logo_load_warning_logged;
+	gs_effect_t *logo_fade_effect;
+	bool logo_fade_effect_load_attempted;
+	bool logo_fade_effect_warning_logged;
 	bool logo_has_seen_detection;
 	uint64_t logo_last_detection_ns;
 	uint64_t logo_boot_grace_until_ns;
@@ -81,4 +84,8 @@ static const uint32_t KIFU_DEFAULT_REQUEST_TIMEOUT_MS = 500U;
 static const uint32_t KIFU_CAPTURE_FRAME_WIDTH = 640U;
 static const char *KIFU_DEFAULT_BACKEND_ADDRESS = "127.0.0.1:50051";
 static const uint64_t KIFU_LOGO_IDLE_DELAY_NS = 3ULL * 10ULL * 1000000000ULL;
+static const uint64_t KIFU_LOGO_FADE_IN_NS = 500ULL * 1000000ULL;
+static const uint64_t KIFU_LOGO_FULL_VISIBLE_NS = 4ULL * 1000000000ULL;
+static const uint64_t KIFU_LOGO_FADE_OUT_NS = 500ULL * 1000000ULL;
+static const uint64_t KIFU_LOGO_CYCLE_NS = 5ULL * 1000000000ULL;
 static const uint64_t KIFU_LOGO_MIN_VISIBLE_NS = 5ULL * 1000000000ULL;

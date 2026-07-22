@@ -5,6 +5,49 @@
 #include <math.h>
 #include <string.h>
 
+static gs_effect_t *ensure_logo_fade_effect(struct kifu_source *context)
+{
+	if (context->logo_fade_effect != NULL) {
+		return context->logo_fade_effect;
+	}
+
+	if (context->logo_fade_effect_load_attempted) {
+		return NULL;
+	}
+
+	context->logo_fade_effect_load_attempted = true;
+	char *effect_path = obs_module_file("effects/kifu-logo-fade.effect");
+	if (effect_path == NULL) {
+		if (!context->logo_fade_effect_warning_logged) {
+			obs_log(LOG_WARNING, "logo fade effect not found: effects/kifu-logo-fade.effect");
+			context->logo_fade_effect_warning_logged = true;
+		}
+		return NULL;
+	}
+
+	char *error_text = NULL;
+	context->logo_fade_effect = gs_effect_create_from_file(effect_path, &error_text);
+	bfree(effect_path);
+
+	if (context->logo_fade_effect == NULL) {
+		if (!context->logo_fade_effect_warning_logged) {
+			obs_log(LOG_WARNING,
+				"failed to create logo fade effect: %s",
+				error_text != NULL ? error_text : "unknown error");
+			context->logo_fade_effect_warning_logged = true;
+		}
+		if (error_text != NULL) {
+			bfree(error_text);
+		}
+		return NULL;
+	}
+
+	if (error_text != NULL) {
+		bfree(error_text);
+	}
+	return context->logo_fade_effect;
+}
+
 static void destroy_preview_texture_slot(struct kifu_source *context, uint32_t slot)
 {
 	if (slot >= 2U) {
@@ -28,6 +71,13 @@ void kifu_render_destroy_preview_textures(struct kifu_source *context)
 
 void kifu_render_destroy_logo_image(struct kifu_source *context)
 {
+	if (context->logo_fade_effect != NULL) {
+		gs_effect_destroy(context->logo_fade_effect);
+		context->logo_fade_effect = NULL;
+	}
+	context->logo_fade_effect_load_attempted = false;
+	context->logo_fade_effect_warning_logged = false;
+
 	if (!context->logo_image_loaded) {
 		return;
 	}
@@ -78,63 +128,77 @@ bool kifu_render_ensure_logo_image_texture(struct kifu_source *context)
 
 bool kifu_render_update_logo_visibility_locked(struct kifu_source *context, uint64_t now_ns)
 {
+	if (context->logo_visible) {
+		if (context->logo_visible_since_ns == 0U) {
+			context->logo_visible_since_ns = now_ns;
+		}
+
+		if (now_ns - context->logo_visible_since_ns >= KIFU_LOGO_CYCLE_NS) {
+			context->logo_visible = false;
+			context->logo_visible_since_ns = 0U;
+			context->logo_hidden_since_ns = now_ns;
+			return false;
+		}
+
+		return true;
+	}
+
+	bool should_trigger_cycle = false;
 	if (context->logo_boot_grace_until_ns > now_ns) {
-		context->logo_visible = true;
-		context->logo_hidden_since_ns = 0U;
-		if (context->logo_visible_since_ns == 0U) {
-			context->logo_visible_since_ns = now_ns;
-		}
-		return true;
-	}
-
-	if (!context->logo_has_seen_detection) {
-		context->logo_visible = true;
-		context->logo_hidden_since_ns = 0U;
-		if (context->logo_visible_since_ns == 0U) {
-			context->logo_visible_since_ns = now_ns;
-		}
-		return true;
-	}
-
-	if (context->latest_dice_count > 0U) {
-		if (context->logo_visible) {
-			if (context->logo_visible_since_ns == 0U) {
-				context->logo_visible_since_ns = now_ns;
-				return true;
-			}
-
-			if (now_ns - context->logo_visible_since_ns >= KIFU_LOGO_MIN_VISIBLE_NS) {
-				context->logo_visible = false;
-				context->logo_visible_since_ns = 0U;
-				context->logo_hidden_since_ns = now_ns;
-				return false;
-			}
-
-			return true;
-		}
-
+		should_trigger_cycle = true;
+	} else if (context->latest_dice_count > 0U) {
 		if (context->logo_hidden_since_ns == 0U) {
 			context->logo_hidden_since_ns = now_ns;
 		}
 		return false;
+	} else {
+		if (context->logo_hidden_since_ns == 0U) {
+			context->logo_hidden_since_ns = now_ns;
+		} else if (now_ns - context->logo_hidden_since_ns >= KIFU_LOGO_IDLE_DELAY_NS) {
+			should_trigger_cycle = true;
+		}
 	}
 
-	if (!context->logo_visible &&
-	    context->logo_hidden_since_ns > 0U &&
-	    now_ns - context->logo_hidden_since_ns >= KIFU_LOGO_IDLE_DELAY_NS) {
+	if (should_trigger_cycle) {
 		context->logo_visible = true;
 		context->logo_visible_since_ns = now_ns;
 		context->logo_hidden_since_ns = 0U;
+		return true;
 	}
 
-	if (context->logo_visible && context->logo_visible_since_ns == 0U) {
-		context->logo_visible_since_ns = now_ns;
-	}
-
-	return context->logo_visible;
+	return false;
 }
 
-void kifu_render_draw_logo(struct kifu_source *context, const struct kifu_snapshot *snapshot, gs_effect_t *effect)
+float kifu_render_logo_opacity_locked(const struct kifu_source *context, uint64_t now_ns)
+{
+	if (!context->logo_visible || context->logo_visible_since_ns == 0U) {
+		return 0.0F;
+	}
+
+	if (now_ns <= context->logo_visible_since_ns) {
+		return 0.0F;
+	}
+
+	const uint64_t elapsed_ns = now_ns - context->logo_visible_since_ns;
+	if (elapsed_ns < KIFU_LOGO_FADE_IN_NS) {
+		return (float)elapsed_ns / (float)KIFU_LOGO_FADE_IN_NS;
+	}
+	if (elapsed_ns < (KIFU_LOGO_FADE_IN_NS + KIFU_LOGO_FULL_VISIBLE_NS)) {
+		return 1.0F;
+	}
+	if (elapsed_ns < KIFU_LOGO_CYCLE_NS) {
+		const uint64_t fade_out_elapsed_ns = elapsed_ns - (KIFU_LOGO_FADE_IN_NS + KIFU_LOGO_FULL_VISIBLE_NS);
+		const float fade_out_progress = (float)fade_out_elapsed_ns / (float)KIFU_LOGO_FADE_OUT_NS;
+		return 1.0F - fade_out_progress;
+	}
+
+	return 0.0F;
+}
+
+void kifu_render_draw_logo(struct kifu_source *context,
+				   const struct kifu_snapshot *snapshot,
+				   gs_effect_t *effect,
+				   float opacity)
 {
 	if (snapshot->width == 0U || snapshot->height == 0U) {
 		return;
@@ -154,16 +218,41 @@ void kifu_render_draw_logo(struct kifu_source *context, const struct kifu_snapsh
 	const uint32_t draw_y = 0U;
 	const uint32_t draw_width = snapshot->width;
 	const uint32_t draw_height = snapshot->height;
-	gs_eparam_t *const image_param = gs_effect_get_param_by_name(effect, "image");
+	if (opacity < 0.0F) {
+		opacity = 0.0F;
+	} else if (opacity > 1.0F) {
+		opacity = 1.0F;
+	}
+
+	gs_effect_t *draw_effect = ensure_logo_fade_effect(context);
+	if (draw_effect == NULL) {
+		draw_effect = effect;
+	}
+	if (draw_effect == NULL) {
+		return;
+	}
+
+	gs_eparam_t *const image_param = gs_effect_get_param_by_name(draw_effect, "image");
 	if (image_param == NULL) {
 		return;
 	}
 	gs_effect_set_texture(image_param, logo_texture);
 
+	gs_eparam_t *const opacity_param = gs_effect_get_param_by_name(draw_effect, "opacity");
+	if (opacity_param != NULL) {
+		gs_effect_set_float(opacity_param, opacity);
+	}
+
 	gs_matrix_push();
 	gs_matrix_translate3f((float)draw_x, (float)draw_y, 0.0F);
 	gs_matrix_scale3f((float)draw_width / (float)texture_width, (float)draw_height / (float)texture_height, 1.0F);
-	gs_draw_sprite(logo_texture, 0U, texture_width, texture_height);
+	if (gs_get_effect() == draw_effect) {
+		gs_draw_sprite(logo_texture, 0U, texture_width, texture_height);
+	} else {
+		while (gs_effect_loop(draw_effect, "Draw")) {
+			gs_draw_sprite(logo_texture, 0U, texture_width, texture_height);
+		}
+	}
 	gs_matrix_pop();
 }
 
