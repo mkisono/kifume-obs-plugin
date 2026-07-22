@@ -158,7 +158,7 @@ void kifu_render_draw_logo(struct kifu_source *context, const struct kifu_snapsh
 	if (image_param == NULL) {
 		return;
 	}
-	gs_effect_set_texture_srgb(image_param, logo_texture);
+	gs_effect_set_texture(image_param, logo_texture);
 
 	gs_matrix_push();
 	gs_matrix_translate3f((float)draw_x, (float)draw_y, 0.0F);
@@ -376,7 +376,7 @@ void kifu_render_draw_dice_crops(struct kifu_source *context, const struct kifu_
 				bfree(crop_rgba);
 				continue;
 			}
-			gs_effect_set_texture_srgb(image_param, crop_texture);
+			gs_effect_set_texture(image_param, crop_texture);
 			gs_texture_set_image(crop_texture, crop_rgba, sw * 4U, false);
 			gs_matrix_push();
 			gs_matrix_translate3f((float)dx, (float)dy, 0.0F);

@@ -371,18 +371,19 @@ void kifu_source_render(void *data, gs_effect_t *effect)
 		logo_texture_ready = kifu_render_ensure_logo_image_texture(context);
 	}
 	const bool effect_already_active = gs_get_effect() == draw_effect;
+	const bool draw_logo = should_render_logo && logo_texture_ready;
 
 	gs_blend_state_push();
-	gs_blend_function(GS_BLEND_SRCALPHA, GS_BLEND_INVSRCALPHA);
+	gs_blend_function(GS_BLEND_ONE, GS_BLEND_ZERO);
 	if (effect_already_active) {
-		if (should_render_logo && logo_texture_ready) {
+		if (draw_logo) {
 			kifu_render_draw_logo(context, &snapshot, draw_effect);
 		} else {
 			kifu_render_draw_dice_crops(context, &snapshot, draw_effect);
 		}
 	} else {
 		while (gs_effect_loop(draw_effect, "Draw")) {
-			if (should_render_logo && logo_texture_ready) {
+			if (draw_logo) {
 				kifu_render_draw_logo(context, &snapshot, draw_effect);
 			} else {
 				kifu_render_draw_dice_crops(context, &snapshot, draw_effect);
