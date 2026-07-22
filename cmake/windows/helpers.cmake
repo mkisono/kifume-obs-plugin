@@ -24,6 +24,62 @@ function(set_target_properties_plugin target)
 
   install(TARGETS ${target} RUNTIME DESTINATION "${target}/bin/64bit" LIBRARY DESTINATION "${target}/bin/64bit")
 
+  set(_kifume_runtime_hint_dirs)
+  if(DEFINED VCPKG_INSTALLED_DIR AND DEFINED VCPKG_TARGET_TRIPLET)
+    list(APPEND _kifume_runtime_hint_dirs
+      "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/bin"
+      "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/debug/bin"
+    )
+  endif()
+
+  foreach(_prefix IN LISTS CMAKE_PREFIX_PATH)
+    if(EXISTS "${_prefix}/bin")
+      list(APPEND _kifume_runtime_hint_dirs "${_prefix}/bin")
+    endif()
+    if(EXISTS "${_prefix}/debug/bin")
+      list(APPEND _kifume_runtime_hint_dirs "${_prefix}/debug/bin")
+    endif()
+  endforeach()
+  list(REMOVE_DUPLICATES _kifume_runtime_hint_dirs)
+
+  set(_kifume_runtime_candidates
+    z.dll
+    zd.dll
+    libssl-3-x64.dll
+    libcrypto-3-x64.dll
+    libprotobufd.dll
+    re2d.dll
+    caresd.dll
+  )
+
+  set(_kifume_extra_runtime_dlls)
+  foreach(_dll_name IN LISTS _kifume_runtime_candidates)
+    foreach(_dll_dir IN LISTS _kifume_runtime_hint_dirs)
+      if(EXISTS "${_dll_dir}/${_dll_name}")
+        list(APPEND _kifume_extra_runtime_dlls "${_dll_dir}/${_dll_name}")
+        break()
+      endif()
+    endforeach()
+  endforeach()
+
+  # Bundle transitive runtime DLLs (for example, gRPC/protobuf from vcpkg)
+  # so OBS can load the plugin outside a developer shell.
+  install(
+    FILES $<TARGET_RUNTIME_DLLS:${target}>
+    DESTINATION "${target}/bin/64bit"
+    CONFIGURATIONS RelWithDebInfo Debug Release
+    OPTIONAL
+  )
+
+  if(_kifume_extra_runtime_dlls)
+    install(
+      FILES ${_kifume_extra_runtime_dlls}
+      DESTINATION "${target}/bin/64bit"
+      CONFIGURATIONS RelWithDebInfo Debug Release
+      OPTIONAL
+    )
+  endif()
+
   install(
     FILES "$<TARGET_PDB_FILE:${target}>"
     CONFIGURATIONS RelWithDebInfo Debug Release
@@ -43,9 +99,28 @@ function(set_target_properties_plugin target)
       "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:${target}>"
       "$<$<CONFIG:Debug,RelWithDebInfo,Release>:$<TARGET_PDB_FILE:${target}>>"
       "${CMAKE_CURRENT_BINARY_DIR}/rundir/$<CONFIG>"
+    COMMAND
+      "${CMAKE_COMMAND}" -E copy_if_different
+      $<TARGET_RUNTIME_DLLS:${target}>
+      "${CMAKE_CURRENT_BINARY_DIR}/rundir/$<CONFIG>"
     COMMENT "Copy ${target} to rundir"
+    COMMAND_EXPAND_LISTS
     VERBATIM
   )
+
+  if(_kifume_extra_runtime_dlls)
+    add_custom_command(
+      TARGET ${target}
+      POST_BUILD
+      COMMAND
+        "${CMAKE_COMMAND}" -E copy_if_different
+        ${_kifume_extra_runtime_dlls}
+        "${CMAKE_CURRENT_BINARY_DIR}/rundir/$<CONFIG>"
+      COMMENT "Copy ${target} extra runtime DLLs to rundir"
+      COMMAND_EXPAND_LISTS
+      VERBATIM
+    )
+  endif()
 
   target_install_resources(${target})
 
