@@ -20,7 +20,7 @@ set(GENERATED_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated)
 find_package(libobs REQUIRED)
 target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE OBS::libobs)
 
-target_sources(${CMAKE_PROJECT_NAME} PRIVATE src/plugin-main.c src/kifu-source.c src/kifu-source-backend.c src/kifu-source-capture.c src/kifu-source-render.c src/kifu-source-utils.c src/kifu-client.cpp)
+target_sources(${CMAKE_PROJECT_NAME} PRIVATE src/plugin-main.c src/kifu-source.c src/kifu-source-backend.c src/kifu-source-capture.c src/kifu-source-render.c src/kifu-source-utils.c src/kifu-dice-stabilizer.c src/kifu-client.cpp)
 
 if(MSVC)
   target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE /wd4996)

@@ -34,6 +34,7 @@ void kifu_capture_clear_frame(struct kifu_source *context)
 	context->capture_frame_size = 0;
 	clear_inference_frame_locked(context);
 	clear_latest_dice_locked(context);
+	kifu_dice_stabilizer_reset(context->dice_stabilizer);
 	context->last_capture_failure_reason = KIFU_CAPTURE_FAILURE_NONE;
 	if (had_capture_or_dice) {
 		context->capture_frame_revision += 1;

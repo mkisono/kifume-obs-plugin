@@ -285,6 +285,7 @@ static gs_texture_t *ensure_preview_texture_slot(struct kifu_source *context,
 void kifu_render_draw_dice_crops(struct kifu_source *context, const struct kifu_snapshot *snapshot, gs_effect_t *effect)
 {
 	struct kifu_dice_result dice_to_render[2];
+	bool dice_slot_valid[2] = {false, false};
 	uint32_t dice_to_render_count = 0U;
 	uint32_t inference_width = 0U;
 	uint32_t inference_height = 0U;
@@ -301,11 +302,9 @@ void kifu_render_draw_dice_crops(struct kifu_source *context, const struct kifu_
 	latest_dice_frame_revision = context->latest_dice_frame_revision;
 	inference_frame_revision = context->inference_frame_revision;
 	dice_to_render_count = context->latest_dice_count;
-	if (dice_to_render_count > 2U) {
-		dice_to_render_count = 2U;
-	}
-	for (uint32_t i = 0U; i < dice_to_render_count; ++i) {
-		dice_to_render[i] = context->latest_dice[i];
+	for (uint32_t slot = 0U; slot < 2U; ++slot) {
+		dice_slot_valid[slot] = context->latest_dice_valid[slot];
+		dice_to_render[slot] = context->latest_dice[slot];
 	}
 	inference_frame_size = context->inference_frame_size;
 	if (context->inference_frame_bytes != NULL && inference_frame_size > 0U) {
@@ -354,7 +353,10 @@ void kifu_render_draw_dice_crops(struct kifu_source *context, const struct kifu_
 		return;
 	}
 
-	for (uint32_t slot = 0U; slot < dice_to_render_count; ++slot) {
+	for (uint32_t slot = 0U; slot < 2U; ++slot) {
+		if (!dice_slot_valid[slot]) {
+			continue;
+		}
 		struct kifu_bounding_box box = kifu_normalize_box_to_pixels(dice_to_render[slot].box, inference_width, inference_height);
 		if (box.width <= 1.0F || box.height <= 1.0F) {
 			continue;

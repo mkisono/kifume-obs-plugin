@@ -12,6 +12,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+struct kifu_dice_stabilizer;
+
 enum kifu_backend_state {
 	KIFU_BACKEND_STATE_IDLE,
 	KIFU_BACKEND_STATE_POLLING,
@@ -62,6 +64,7 @@ struct kifu_source {
 	gs_effect_t *logo_fade_effect;
 	bool logo_fade_effect_load_attempted;
 	bool logo_fade_effect_warning_logged;
+	struct kifu_dice_stabilizer *dice_stabilizer;
 	bool logo_has_seen_detection;
 	uint64_t logo_last_detection_ns;
 	uint64_t logo_boot_grace_until_ns;
@@ -69,6 +72,7 @@ struct kifu_source {
 	bool logo_visible;
 	uint64_t logo_visible_since_ns;
 	struct kifu_dice_result latest_dice[KIFU_MAX_DICE_RESULTS];
+	bool latest_dice_valid[2];
 	uint32_t latest_dice_count;
 	uint64_t latest_dice_frame_revision;
 	enum kifu_capture_failure_reason last_capture_failure_reason;

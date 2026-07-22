@@ -94,6 +94,9 @@ static obs_property_t *add_capture_source_property(obs_properties_t *properties,
 void clear_latest_dice_locked(struct kifu_source *context)
 {
 	context->latest_dice_count = 0U;
+	for (uint32_t slot = 0U; slot < 2U; ++slot) {
+		context->latest_dice_valid[slot] = false;
+	}
 	context->latest_dice_frame_revision = 0U;
 }
 
@@ -218,6 +221,7 @@ struct kifu_source *kifu_source_create(obs_data_t *settings, obs_source_t *sourc
 	context->logo_fade_effect = NULL;
 	context->logo_fade_effect_load_attempted = false;
 	context->logo_fade_effect_warning_logged = false;
+	context->dice_stabilizer = kifu_dice_stabilizer_create();
 	context->logo_has_seen_detection = false;
 	context->logo_last_detection_ns = 0U;
 	context->logo_boot_grace_until_ns = 0U;
@@ -240,6 +244,9 @@ struct kifu_source *kifu_source_create(obs_data_t *settings, obs_source_t *sourc
 		context->latest_dice[i].box.height = 0.0F;
 		context->latest_dice[i].center_x = 0.0F;
 		context->latest_dice[i].center_y = 0.0F;
+	}
+	for (uint32_t slot = 0U; slot < 2U; ++slot) {
+		context->latest_dice_valid[slot] = false;
 	}
 	context->backend_state = KIFU_BACKEND_STATE_IDLE;
 	context->backend_request_sequence = 0;
@@ -279,6 +286,7 @@ void kifu_source_destroy(void *data)
 	pthread_mutex_unlock(&context->mutex);
 
 	kifu_backend_free_client(context);
+	kifu_dice_stabilizer_destroy(context->dice_stabilizer);
 	pthread_mutex_destroy(&context->mutex);
 	bfree(context);
 	obs_log(LOG_INFO, "source destroyed");

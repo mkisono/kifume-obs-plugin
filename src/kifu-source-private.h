@@ -1,6 +1,7 @@
 #pragma once
 
 #include "kifu-source-state.h"
+#include "kifu-dice-stabilizer.h"
 
 void kifu_render_destroy_preview_textures(struct kifu_source *context);
 void kifu_render_destroy_logo_image(struct kifu_source *context);

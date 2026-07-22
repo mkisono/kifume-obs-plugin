@@ -78,6 +78,65 @@ static bool ensure_backend_client(struct kifu_source *context, const struct kifu
 	return true;
 }
 
+static uint32_t backend_store_stabilized_dice(struct kifu_source *context,
+						 const struct kifu_dice_result *raw_dice,
+						 uint32_t raw_count,
+						 const uint8_t *frame_bytes,
+						 size_t frame_size,
+						 int32_t frame_width,
+						 int32_t frame_height,
+						 uint64_t frame_revision,
+						 bool refresh_frame,
+						 bool record_detection)
+{
+	struct kifu_dice_result stabilized[2] = {0};
+	bool stabilized_valid[2] = {false, false};
+	const uint64_t now_ns = os_gettime_ns();
+
+	uint32_t stabilized_count = 0U;
+	pthread_mutex_lock(&context->mutex);
+	stabilized_count = kifu_dice_stabilizer_update(
+		context->dice_stabilizer,
+		raw_dice,
+		raw_count,
+		now_ns,
+		stabilized,
+		stabilized_valid,
+		2U);
+
+	if (stabilized_count > 0U) {
+		for (uint32_t slot = 0U; slot < 2U; ++slot) {
+			context->latest_dice_valid[slot] = stabilized_valid[slot];
+			if (stabilized_valid[slot]) {
+				context->latest_dice[slot] = stabilized[slot];
+			}
+		}
+		context->latest_dice_count = stabilized_count;
+		if (record_detection && raw_count > 0U) {
+			context->logo_has_seen_detection = true;
+			context->logo_last_detection_ns = now_ns;
+		}
+		if (refresh_frame && frame_bytes != NULL && frame_size > 0U) {
+			clear_inference_frame_locked(context);
+			context->inference_frame_bytes = bzalloc(frame_size);
+			if (context->inference_frame_bytes != NULL) {
+				memcpy(context->inference_frame_bytes, frame_bytes, frame_size);
+				context->inference_frame_size = frame_size;
+				context->inference_frame_width = (uint32_t)frame_width;
+				context->inference_frame_height = (uint32_t)frame_height;
+				context->inference_frame_revision = frame_revision;
+			}
+			context->latest_dice_frame_revision = frame_revision;
+		}
+	} else {
+		clear_latest_dice_locked(context);
+		clear_inference_frame_locked(context);
+	}
+
+	pthread_mutex_unlock(&context->mutex);
+	return stabilized_count;
+}
+
 static void *kifu_backend_worker(void *data)
 {
 	struct kifu_source *context = data;
@@ -198,10 +257,7 @@ static void *kifu_backend_worker(void *data)
 				  request.source_id);
 
 		if (!kifu_client_submit_frame(context->client, &request, &result)) {
-			pthread_mutex_lock(&context->mutex);
-			clear_latest_dice_locked(context);
-			clear_inference_frame_locked(context);
-			pthread_mutex_unlock(&context->mutex);
+			(void)backend_store_stabilized_dice(context, NULL, 0U, NULL, 0U, 0, 0, 0U, false, false);
 			backend_state_set(context, KIFU_BACKEND_STATE_ERROR, "%s", result.error_message[0] != '\0' ? result.error_message : kifu_client_last_error(context->client));
 			bfree(frame_bytes);
 			os_sleep_ms(snapshot.request_interval_ms);
@@ -210,49 +266,25 @@ static void *kifu_backend_worker(void *data)
 		}
 
 		if (result.status == KIFU_RESULT_STATUS_OK) {
-			pthread_mutex_lock(&context->mutex);
-			context->latest_dice_count = result.dice_count;
-			if (context->latest_dice_count > KIFU_MAX_DICE_RESULTS) {
-				context->latest_dice_count = KIFU_MAX_DICE_RESULTS;
-			}
-			for (uint32_t i = 0; i < context->latest_dice_count; ++i) {
-				context->latest_dice[i] = result.dice[i];
-			}
-			if (context->latest_dice_count > 0U) {
-				context->logo_has_seen_detection = true;
-				context->logo_last_detection_ns = os_gettime_ns();
-			}
-			clear_inference_frame_locked(context);
-			if (frame_bytes != NULL && frame_size > 0U) {
-				context->inference_frame_bytes = bzalloc(frame_size);
-				if (context->inference_frame_bytes != NULL) {
-					memcpy(context->inference_frame_bytes, frame_bytes, frame_size);
-					context->inference_frame_size = frame_size;
-					context->inference_frame_width = (uint32_t)frame_width;
-					context->inference_frame_height = (uint32_t)frame_height;
-					context->inference_frame_revision = frame_revision;
-				}
-			}
-			context->latest_dice_frame_revision = frame_revision;
-			pthread_mutex_unlock(&context->mutex);
+			(void)backend_store_stabilized_dice(context,
+						    result.dice,
+						    result.dice_count,
+						    frame_bytes,
+						    frame_size,
+						    frame_width,
+						    frame_height,
+						    frame_revision,
+						    true,
+						    true);
 			backend_state_set(context, KIFU_BACKEND_STATE_IDLE, "ok: %u detections / %u dice", result.detections_count, result.dice_count);
 		} else if (result.status == KIFU_RESULT_STATUS_STALE) {
-			pthread_mutex_lock(&context->mutex);
-			clear_latest_dice_locked(context);
-			clear_inference_frame_locked(context);
-			pthread_mutex_unlock(&context->mutex);
+			(void)backend_store_stabilized_dice(context, NULL, 0U, NULL, 0U, 0, 0, 0U, false, false);
 			backend_state_set(context, KIFU_BACKEND_STATE_STALE, "stale: %u detections / %u dice", result.detections_count, result.dice_count);
 		} else if (result.status == KIFU_RESULT_STATUS_TIMEOUT) {
-			pthread_mutex_lock(&context->mutex);
-			clear_latest_dice_locked(context);
-			clear_inference_frame_locked(context);
-			pthread_mutex_unlock(&context->mutex);
+			(void)backend_store_stabilized_dice(context, NULL, 0U, NULL, 0U, 0, 0, 0U, false, false);
 			backend_state_set(context, KIFU_BACKEND_STATE_STALE, "backend timeout");
 		} else {
-			pthread_mutex_lock(&context->mutex);
-			clear_latest_dice_locked(context);
-			clear_inference_frame_locked(context);
-			pthread_mutex_unlock(&context->mutex);
+			(void)backend_store_stabilized_dice(context, NULL, 0U, NULL, 0U, 0, 0, 0U, false, false);
 			backend_state_set(context, KIFU_BACKEND_STATE_ERROR, "%s", result.error_message[0] != '\0' ? result.error_message : "backend returned an error");
 		}
 
