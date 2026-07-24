@@ -7,21 +7,6 @@
 #include <stdarg.h>
 #include <string.h>
 
-static const char *backend_state_name(enum kifu_backend_state state)
-{
-	switch (state) {
-	case KIFU_BACKEND_STATE_POLLING:
-		return "polling";
-	case KIFU_BACKEND_STATE_STALE:
-		return "stale";
-	case KIFU_BACKEND_STATE_ERROR:
-		return "error";
-	case KIFU_BACKEND_STATE_IDLE:
-	default:
-		return "idle";
-	}
-}
-
 static void backend_state_set(struct kifu_source *context, enum kifu_backend_state state, const char *format, ...)
 {
 	va_list args;
@@ -35,8 +20,6 @@ static void backend_state_set(struct kifu_source *context, enum kifu_backend_sta
 	strncpy(context->backend_message, message, sizeof(context->backend_message) - 1U);
 	context->backend_message[sizeof(context->backend_message) - 1U] = '\0';
 	pthread_mutex_unlock(&context->mutex);
-
-	obs_log(LOG_INFO, "backend state -> %s: %s", backend_state_name(state), context->backend_message);
 }
 
 static void free_backend_client(struct kifu_source *context)
@@ -74,7 +57,6 @@ static bool ensure_backend_client(struct kifu_source *context, const struct kifu
 		return false;
 	}
 
-	obs_log(LOG_INFO, "backend client connected to %s", snapshot->backend_address);
 	return true;
 }
 

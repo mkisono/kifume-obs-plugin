@@ -300,7 +300,6 @@ void kifu_source_update(void *data, obs_data_t *settings)
 	}
 
 	source_apply_settings(context, settings);
-	obs_log(LOG_INFO, "source snapshot committed (revision %llu)", (unsigned long long)context->snapshot.revision);
 }
 
 void kifu_source_activate(void *data)
