@@ -2,6 +2,7 @@
 
 #include "kifu-source-state.h"
 #include "kifu-dice-stabilizer.h"
+#include "kifu-logo-state-machine.h"
 
 void kifu_render_destroy_preview_textures(struct kifu_source *context);
 void kifu_render_destroy_logo_image(struct kifu_source *context);

@@ -68,8 +68,7 @@ static uint32_t backend_store_stabilized_dice(struct kifu_source *context,
 						 int32_t frame_width,
 						 int32_t frame_height,
 						 uint64_t frame_revision,
-						 bool refresh_frame,
-						 bool record_detection)
+						 bool refresh_frame)
 {
 	struct kifu_dice_result stabilized[2] = {0};
 	bool stabilized_valid[2] = {false, false};
@@ -94,10 +93,6 @@ static uint32_t backend_store_stabilized_dice(struct kifu_source *context,
 			}
 		}
 		context->latest_dice_count = stabilized_count;
-		if (record_detection && raw_count > 0U) {
-			context->logo_has_seen_detection = true;
-			context->logo_last_detection_ns = now_ns;
-		}
 		if (refresh_frame && frame_bytes != NULL && frame_size > 0U) {
 			clear_inference_frame_locked(context);
 			context->inference_frame_bytes = bzalloc(frame_size);
@@ -239,7 +234,7 @@ static void *kifu_backend_worker(void *data)
 				  request.source_id);
 
 		if (!kifu_client_submit_frame(context->client, &request, &result)) {
-			(void)backend_store_stabilized_dice(context, NULL, 0U, NULL, 0U, 0, 0, 0U, false, false);
+			(void)backend_store_stabilized_dice(context, NULL, 0U, NULL, 0U, 0, 0, 0U, false);
 			backend_state_set(context, KIFU_BACKEND_STATE_ERROR, "%s", result.error_message[0] != '\0' ? result.error_message : kifu_client_last_error(context->client));
 			bfree(frame_bytes);
 			os_sleep_ms(snapshot.request_interval_ms);
@@ -256,17 +251,16 @@ static void *kifu_backend_worker(void *data)
 						    frame_width,
 						    frame_height,
 						    frame_revision,
-						    true,
 						    true);
 			backend_state_set(context, KIFU_BACKEND_STATE_IDLE, "ok: %u detections / %u dice", result.detections_count, result.dice_count);
 		} else if (result.status == KIFU_RESULT_STATUS_STALE) {
-			(void)backend_store_stabilized_dice(context, NULL, 0U, NULL, 0U, 0, 0, 0U, false, false);
+			(void)backend_store_stabilized_dice(context, NULL, 0U, NULL, 0U, 0, 0, 0U, false);
 			backend_state_set(context, KIFU_BACKEND_STATE_STALE, "stale: %u detections / %u dice", result.detections_count, result.dice_count);
 		} else if (result.status == KIFU_RESULT_STATUS_TIMEOUT) {
-			(void)backend_store_stabilized_dice(context, NULL, 0U, NULL, 0U, 0, 0, 0U, false, false);
+			(void)backend_store_stabilized_dice(context, NULL, 0U, NULL, 0U, 0, 0, 0U, false);
 			backend_state_set(context, KIFU_BACKEND_STATE_STALE, "backend timeout");
 		} else {
-			(void)backend_store_stabilized_dice(context, NULL, 0U, NULL, 0U, 0, 0, 0U, false, false);
+			(void)backend_store_stabilized_dice(context, NULL, 0U, NULL, 0U, 0, 0, 0U, false);
 			backend_state_set(context, KIFU_BACKEND_STATE_ERROR, "%s", result.error_message[0] != '\0' ? result.error_message : "backend returned an error");
 		}
 

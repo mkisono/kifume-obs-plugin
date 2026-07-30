@@ -13,6 +13,7 @@
 #include <stdint.h>
 
 struct kifu_dice_stabilizer;
+struct kifu_logo_state_machine;
 
 enum kifu_backend_state {
 	KIFU_BACKEND_STATE_IDLE,
@@ -65,12 +66,7 @@ struct kifu_source {
 	bool logo_fade_effect_load_attempted;
 	bool logo_fade_effect_warning_logged;
 	struct kifu_dice_stabilizer *dice_stabilizer;
-	bool logo_has_seen_detection;
-	uint64_t logo_last_detection_ns;
-	uint64_t logo_boot_grace_until_ns;
-	uint64_t logo_hidden_since_ns;
-	bool logo_visible;
-	uint64_t logo_visible_since_ns;
+	struct kifu_logo_state_machine *logo_state_machine;
 	struct kifu_dice_result latest_dice[KIFU_MAX_DICE_RESULTS];
 	bool latest_dice_valid[2];
 	uint32_t latest_dice_count;
@@ -87,9 +83,3 @@ static const uint32_t KIFU_DEFAULT_REQUEST_INTERVAL_MS = 500U;
 static const uint32_t KIFU_DEFAULT_REQUEST_TIMEOUT_MS = 500U;
 static const uint32_t KIFU_CAPTURE_FRAME_WIDTH = 640U;
 static const char *KIFU_DEFAULT_BACKEND_ADDRESS = "127.0.0.1:50051";
-static const uint64_t KIFU_LOGO_IDLE_DELAY_NS = 3ULL * 60ULL * 1000000000ULL;
-static const uint64_t KIFU_LOGO_FADE_IN_NS = 500ULL * 1000000ULL;
-static const uint64_t KIFU_LOGO_FULL_VISIBLE_NS = 3ULL * 1000000000ULL;
-static const uint64_t KIFU_LOGO_FADE_OUT_NS = 500ULL * 1000000ULL;
-static const uint64_t KIFU_LOGO_CYCLE_NS = 5ULL * 1000000000ULL;
-static const uint64_t KIFU_LOGO_MIN_VISIBLE_NS = 4ULL * 1000000000ULL;

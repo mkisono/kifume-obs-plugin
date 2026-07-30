@@ -128,71 +128,20 @@ bool kifu_render_ensure_logo_image_texture(struct kifu_source *context)
 
 bool kifu_render_update_logo_visibility_locked(struct kifu_source *context, uint64_t now_ns)
 {
-	if (context->logo_visible) {
-		if (context->logo_visible_since_ns == 0U) {
-			context->logo_visible_since_ns = now_ns;
-		}
-
-		if (now_ns - context->logo_visible_since_ns >= KIFU_LOGO_CYCLE_NS) {
-			context->logo_visible = false;
-			context->logo_visible_since_ns = 0U;
-			context->logo_hidden_since_ns = now_ns;
-			return false;
-		}
-
-		return true;
-	}
-
-	bool should_trigger_cycle = false;
-	if (context->logo_boot_grace_until_ns > now_ns) {
-		should_trigger_cycle = true;
-	} else if (context->latest_dice_count > 0U) {
-		if (context->logo_hidden_since_ns == 0U) {
-			context->logo_hidden_since_ns = now_ns;
-		}
+	if (context->logo_state_machine == NULL) {
 		return false;
-	} else {
-		if (context->logo_hidden_since_ns == 0U) {
-			context->logo_hidden_since_ns = now_ns;
-		} else if (now_ns - context->logo_hidden_since_ns >= KIFU_LOGO_IDLE_DELAY_NS) {
-			should_trigger_cycle = true;
-		}
 	}
 
-	if (should_trigger_cycle) {
-		context->logo_visible = true;
-		context->logo_visible_since_ns = now_ns;
-		context->logo_hidden_since_ns = 0U;
-		return true;
-	}
-
-	return false;
+	return kifu_logo_state_machine_update(context->logo_state_machine, now_ns, context->latest_dice_count);
 }
 
 float kifu_render_logo_opacity_locked(const struct kifu_source *context, uint64_t now_ns)
 {
-	if (!context->logo_visible || context->logo_visible_since_ns == 0U) {
+	if (context->logo_state_machine == NULL) {
 		return 0.0F;
 	}
 
-	if (now_ns <= context->logo_visible_since_ns) {
-		return 0.0F;
-	}
-
-	const uint64_t elapsed_ns = now_ns - context->logo_visible_since_ns;
-	if (elapsed_ns < KIFU_LOGO_FADE_IN_NS) {
-		return (float)elapsed_ns / (float)KIFU_LOGO_FADE_IN_NS;
-	}
-	if (elapsed_ns < (KIFU_LOGO_FADE_IN_NS + KIFU_LOGO_FULL_VISIBLE_NS)) {
-		return 1.0F;
-	}
-	if (elapsed_ns < KIFU_LOGO_CYCLE_NS) {
-		const uint64_t fade_out_elapsed_ns = elapsed_ns - (KIFU_LOGO_FADE_IN_NS + KIFU_LOGO_FULL_VISIBLE_NS);
-		const float fade_out_progress = (float)fade_out_elapsed_ns / (float)KIFU_LOGO_FADE_OUT_NS;
-		return 1.0F - fade_out_progress;
-	}
-
-	return 0.0F;
+	return kifu_logo_state_machine_opacity(context->logo_state_machine, now_ns);
 }
 
 void kifu_render_draw_logo(struct kifu_source *context,
