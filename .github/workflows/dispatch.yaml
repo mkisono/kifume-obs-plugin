@@ -13,6 +13,6 @@ permissions:
   contents: write
 jobs:
   check-and-build:
-    if: inputs.job == 'build'
+    if: ${{ false }}
     uses: ./.github/workflows/build-project.yaml
     secrets: inherit

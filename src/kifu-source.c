@@ -222,12 +222,7 @@ struct kifu_source *kifu_source_create(obs_data_t *settings, obs_source_t *sourc
 	context->logo_fade_effect_load_attempted = false;
 	context->logo_fade_effect_warning_logged = false;
 	context->dice_stabilizer = kifu_dice_stabilizer_create();
-	context->logo_has_seen_detection = false;
-	context->logo_last_detection_ns = 0U;
-	context->logo_boot_grace_until_ns = 0U;
-	context->logo_hidden_since_ns = 0U;
-	context->logo_visible = true;
-	context->logo_visible_since_ns = 0U;
+	context->logo_state_machine = kifu_logo_state_machine_create();
 	for (uint32_t slot = 0U; slot < 2U; ++slot) {
 		context->preview_textures[slot] = NULL;
 		context->preview_texture_width[slot] = 0U;
@@ -287,6 +282,7 @@ void kifu_source_destroy(void *data)
 
 	kifu_backend_free_client(context);
 	kifu_dice_stabilizer_destroy(context->dice_stabilizer);
+	kifu_logo_state_machine_destroy(context->logo_state_machine);
 	pthread_mutex_destroy(&context->mutex);
 	bfree(context);
 	obs_log(LOG_INFO, "source destroyed");
@@ -300,7 +296,6 @@ void kifu_source_update(void *data, obs_data_t *settings)
 	}
 
 	source_apply_settings(context, settings);
-	obs_log(LOG_INFO, "source snapshot committed (revision %llu)", (unsigned long long)context->snapshot.revision);
 }
 
 void kifu_source_activate(void *data)
@@ -311,9 +306,7 @@ void kifu_source_activate(void *data)
 	}
 
 	pthread_mutex_lock(&context->mutex);
-	context->logo_boot_grace_until_ns = os_gettime_ns() + KIFU_LOGO_MIN_VISIBLE_NS;
-	context->logo_visible = true;
-	context->logo_visible_since_ns = context->logo_boot_grace_until_ns - KIFU_LOGO_MIN_VISIBLE_NS;
+	kifu_logo_state_machine_activate(context->logo_state_machine, os_gettime_ns());
 	pthread_mutex_unlock(&context->mutex);
 
 	kifu_backend_start_worker(context);
@@ -381,17 +374,23 @@ void kifu_source_render(void *data, gs_effect_t *effect)
 		free_snapshot_strings(&snapshot);
 		return;
 	}
+	gs_effect_t *const active_effect = gs_get_effect();
+	if (active_effect != NULL) {
+		draw_effect = active_effect;
+	}
 	bool logo_texture_ready = false;
 	if (should_render_logo) {
 		logo_texture_ready = kifu_render_ensure_logo_image_texture(context);
 	}
-	const bool effect_already_active = gs_get_effect() == draw_effect;
 	const bool draw_logo = should_render_logo && logo_texture_ready;
+	const bool effect_already_active = active_effect != NULL;
 
 	gs_blend_state_push();
 	gs_blend_function(GS_BLEND_SRCALPHA, GS_BLEND_INVSRCALPHA);
 	if (draw_logo) {
-		kifu_render_draw_logo(context, &snapshot, draw_effect, logo_opacity);
+		if (!kifu_render_draw_logo(context, &snapshot, draw_effect, logo_opacity)) {
+			kifu_render_draw_dice_crops(context, &snapshot, draw_effect);
+		}
 	} else if (effect_already_active) {
 		kifu_render_draw_dice_crops(context, &snapshot, draw_effect);
 	} else {
