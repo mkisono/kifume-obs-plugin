@@ -374,17 +374,23 @@ void kifu_source_render(void *data, gs_effect_t *effect)
 		free_snapshot_strings(&snapshot);
 		return;
 	}
+	gs_effect_t *const active_effect = gs_get_effect();
+	if (active_effect != NULL) {
+		draw_effect = active_effect;
+	}
 	bool logo_texture_ready = false;
 	if (should_render_logo) {
 		logo_texture_ready = kifu_render_ensure_logo_image_texture(context);
 	}
-	const bool effect_already_active = gs_get_effect() == draw_effect;
 	const bool draw_logo = should_render_logo && logo_texture_ready;
+	const bool effect_already_active = active_effect != NULL;
 
 	gs_blend_state_push();
 	gs_blend_function(GS_BLEND_SRCALPHA, GS_BLEND_INVSRCALPHA);
 	if (draw_logo) {
-		kifu_render_draw_logo(context, &snapshot, draw_effect, logo_opacity);
+		if (!kifu_render_draw_logo(context, &snapshot, draw_effect, logo_opacity)) {
+			kifu_render_draw_dice_crops(context, &snapshot, draw_effect);
+		}
 	} else if (effect_already_active) {
 		kifu_render_draw_dice_crops(context, &snapshot, draw_effect);
 	} else {

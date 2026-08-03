@@ -144,24 +144,24 @@ float kifu_render_logo_opacity_locked(const struct kifu_source *context, uint64_
 	return kifu_logo_state_machine_opacity(context->logo_state_machine, now_ns);
 }
 
-void kifu_render_draw_logo(struct kifu_source *context,
+bool kifu_render_draw_logo(struct kifu_source *context,
 				   const struct kifu_snapshot *snapshot,
 				   gs_effect_t *effect,
 				   float opacity)
 {
 	if (snapshot->width == 0U || snapshot->height == 0U) {
-		return;
+		return false;
 	}
 
 	gs_texture_t *logo_texture = context->logo_image.texture;
 	if (logo_texture == NULL) {
-		return;
+		return false;
 	}
 
 	const uint32_t texture_width = gs_texture_get_width(logo_texture);
 	const uint32_t texture_height = gs_texture_get_height(logo_texture);
 	if (texture_width == 0U || texture_height == 0U) {
-		return;
+		return false;
 	}
 	const uint32_t draw_x = 0U;
 	const uint32_t draw_y = 0U;
@@ -173,17 +173,21 @@ void kifu_render_draw_logo(struct kifu_source *context,
 		opacity = 1.0F;
 	}
 
-	gs_effect_t *draw_effect = ensure_logo_fade_effect(context);
-	if (draw_effect == NULL) {
-		draw_effect = effect;
+	gs_effect_t *const active_effect = gs_get_effect();
+	gs_effect_t *draw_effect = effect;
+	if (active_effect == NULL) {
+		draw_effect = ensure_logo_fade_effect(context);
+		if (draw_effect == NULL) {
+			draw_effect = effect;
+		}
 	}
 	if (draw_effect == NULL) {
-		return;
+		return false;
 	}
 
 	gs_eparam_t *const image_param = gs_effect_get_param_by_name(draw_effect, "image");
 	if (image_param == NULL) {
-		return;
+		return false;
 	}
 	gs_effect_set_texture(image_param, logo_texture);
 
@@ -195,7 +199,7 @@ void kifu_render_draw_logo(struct kifu_source *context,
 	gs_matrix_push();
 	gs_matrix_translate3f((float)draw_x, (float)draw_y, 0.0F);
 	gs_matrix_scale3f((float)draw_width / (float)texture_width, (float)draw_height / (float)texture_height, 1.0F);
-	if (gs_get_effect() == draw_effect) {
+	if (active_effect != NULL || gs_get_effect() == draw_effect) {
 		gs_draw_sprite(logo_texture, 0U, texture_width, texture_height);
 	} else {
 		while (gs_effect_loop(draw_effect, "Draw")) {
@@ -203,6 +207,8 @@ void kifu_render_draw_logo(struct kifu_source *context,
 		}
 	}
 	gs_matrix_pop();
+
+	return true;
 }
 
 static gs_texture_t *ensure_preview_texture_slot(struct kifu_source *context,
