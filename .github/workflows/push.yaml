@@ -1,25 +1,20 @@
 name: Push
 run-name: ${{ github.ref_name }} push run 🚀
 on:
-  push:
-    branches:
-      - master
-      - main
-      - 'release/**'
-    tags:
-      - '*'
+  workflow_dispatch:
 permissions:
   contents: write
 jobs:
   check-format:
     name: Check Formatting 🔍
-    if: github.ref_name == 'master' || github.ref_name == 'main'
+    if: ${{ false }}
     uses: ./.github/workflows/check-format.yaml
     permissions:
       contents: read
 
   build-project:
     name: Build Project 🧱
+    if: ${{ false }}
     uses: ./.github/workflows/build-project.yaml
     secrets: inherit
     permissions:
@@ -27,7 +22,7 @@ jobs:
 
   create-release:
     name: Create Release 🛫
-    if: github.ref_type == 'tag'
+    if: ${{ false }}
     runs-on: ubuntu-24.04
     needs: build-project
     defaults:

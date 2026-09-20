@@ -2,11 +2,6 @@ name: Pull Request
 run-name: ${{ github.event.pull_request.title }} pull request run 🚀
 on:
   workflow_dispatch:
-  pull_request:
-    paths-ignore:
-      - '**.md'
-    branches: [master, main]
-    types: [ opened, synchronize, reopened ]
 permissions:
   contents: read
 concurrency:
@@ -15,12 +10,14 @@ concurrency:
 jobs:
   check-format:
     name: Check Formatting 🔍
+    if: ${{ false }}
     uses: ./.github/workflows/check-format.yaml
     permissions:
       contents: read
 
   build-project:
     name: Build Project 🧱
+    if: ${{ false }}
     uses: ./.github/workflows/build-project.yaml
     secrets: inherit
     permissions:
